@@ -1,0 +1,65 @@
+#!/usr/local/bin/ruby
+#
+# Munin plugin for Solr ver4.x multicore
+#
+# author: Hiroki Fujita
+#
+# Magic markers
+#%# family=auto
+#%# capabilities=autoconf 
+
+require 'open-uri'
+
+SOLR_PORT = 8983
+SOLR_HOST = "localhost"
+
+target = __FILE__.split("_")[-1]
+
+cores_url = "http://#{SOLR_HOST}:#{SOLR_PORT}/solr/admin/cores?action=STATUS&wt=ruby"
+
+error = false
+begin
+  cores = eval(open(cores_url).read)['status'].keys.sort
+rescue
+  error = true
+end
+
+case ARGV[0]
+when 'autoconf'
+  puts error ? "no" : "yes"
+when 'config'
+  if target.end_with?("Cache")
+    puts "graph_title #{target} hitratio"
+    puts "graph_args --base 1000 -r --lower-limit 0 --upper-limit 100"
+    puts "graph_vlabel %"
+  else
+    puts "graph_title #{target}"
+    puts "graph_args --base 1000"
+    puts "graph_vlabel Size #{target}"
+  end
+
+  puts "graph_category Solr"
+  puts "graph_info Info for cores: #{cores.join(",")}"
+
+  cores.each do |core|
+    puts "#{core}.label #{core}"
+    puts "#{core}.type GAUGE"
+    puts "#{core}.min 0"
+  end
+else
+  cores.each do |core|
+    url = "http://#{SOLR_HOST}:#{SOLR_PORT}/solr/#{core}/admin/mbeans?stats=true&wt=ruby"
+    res = eval(open(url).read)
+
+    if target.end_with?('Cache')
+      cache = Hash[*res['solr-mbeans']]['CACHE']
+      hitratio = cache[target]['stats']['hitratio']
+      stat = (hitratio.to_f * 100).round
+    else
+      handler = Hash[*res['solr-mbeans']]["QUERYHANDLER"]
+      stat = handler['/select']['stats'][target]
+    end
+
+    puts "#{core}.value #{stat}"
+  end
+end
