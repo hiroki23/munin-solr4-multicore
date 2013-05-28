@@ -46,7 +46,7 @@ See QUERYHANDLER section at admin/mbeans URL like:
 
 ### CACHE
 
-You can get
+You can also get cache hit ratio about
 
 * queryResultCache
 * documentCache
